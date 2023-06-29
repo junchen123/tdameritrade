@@ -123,7 +123,7 @@ class TDClient(object):
         data = self.accounts()
         account_dataframes = []
         for accountId, value in data.items():
-            account_dataframes.append(pd.io.json.json_normalize(value))
+            account_dataframes.append(pd.json_normalize(value))
             account_dataframes[-1].columns = [
                 c.replace("securitiesAccount.", "")
                 for c in account_dataframes[-1].columns
@@ -451,23 +451,32 @@ class TDClient(object):
             expMonth=expMonth,
             optionType=optionType,
         )
-        for date in dat["callExpDateMap"]:
-            for strike in dat["callExpDateMap"][date]:
-                ret.extend(dat["callExpDateMap"][date][strike])
-        for date in dat["putExpDateMap"]:
-            for strike in dat["putExpDateMap"][date]:
-                ret.extend(dat["putExpDateMap"][date][strike])
 
-        df = pd.DataFrame(ret)
-        for col in (
-            "tradeTimeInLong",
-            "quoteTimeInLong",
-            "expirationDate",
-            "lastTradingDay",
-        ):
-            df[col] = pd.to_datetime(df[col], unit="ms")
+        if dat["status"] == "SUCCESS":
+            for date in dat["callExpDateMap"]:
+                for strike in dat["callExpDateMap"][date]:
+                    ret.extend(dat["callExpDateMap"][date][strike])
+            for date in dat["putExpDateMap"]:
+                for strike in dat["putExpDateMap"][date]:
+                    ret.extend(dat["putExpDateMap"][date][strike])
 
-        return df
+            df = pd.DataFrame(ret)
+            for col in (
+                "tradeTimeInLong",
+                "quoteTimeInLong",
+                "expirationDate",
+                "lastTradingDay",
+            ):
+                df[col] = pd.to_datetime(df[col], unit="ms")
+
+            for col in (
+                "interestRate",
+                "underlyingPrice",
+            ):
+                if col in dat:
+                    df[col] = dat[col]
+            return df
+        raise (Exception(dat))
 
     def movers(self, index, direction="up", change="percent"):
         """request market movers
@@ -544,7 +553,7 @@ class TDClient(object):
             order (JSON): order instance to place
         """
         return self._request(
-            PLACE_ORDER.format(accountId=accountId), method="POST", json=order
+            PLACE_ORDER.format(accountId=accountId), method="POST", data=order
         )
 
     def replaceOrder(self, accountId, orderId, order):
